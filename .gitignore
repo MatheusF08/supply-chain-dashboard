@@ -1,0 +1,12 @@
+# Arquivos de ambiente virtual
+venv/
+
+# Arquivo de senhas e chaves
+.env
+
+# Arquivos de dados gerados (CSVs)
+*.csv
+
+# Arquivos de cache do Python
+__pycache__/
+.DS_Store
