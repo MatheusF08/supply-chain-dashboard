@@ -1,0 +1,6 @@
+Nome do Navio,IMO,Status do Navio,ETA Previsto,Porto de Destino,Próxima Partida Estimada,Carga Atual,Disponibilidade,Consulta em
+Ever Given,9811000,Ancorado,2026-04-10 21:18:36.962158,Porto de Santos,2026-04-12 21:18:36.962158,Soja a Granel,Contratado,2026-03-30 21:18:36.962241
+CMA CGM Jacques Saade,9839172,Em Rota,2026-03-31 03:07:42.862143,Porto de Roterdã,2026-04-03 03:07:42.862143,Soja a Granel,Contratado,2026-03-30 21:18:37.468058
+HMM Algeciras,9863297,Em Rota,2026-04-08 21:18:37.973165,Porto de Paranaguá,2026-04-13 21:18:37.973165,N/A (Vazio),Disponível para Frete,2026-03-30 21:18:37.973217
+MSC Gulsun,9462757,Atracado,2026-04-14 21:18:38.478319,Porto de Santos,2026-04-18 21:18:38.478319,N/A (Vazio),Disponível para Frete,2026-03-30 21:18:38.478398
+OOCL Hong Kong,9780882,Em Rota,2026-04-14 21:18:38.979102,Porto de Roterdã,2026-04-16 21:18:38.979102,N/A (Vazio),Disponível para Frete,2026-03-30 21:18:38.979192
