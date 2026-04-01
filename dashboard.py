@@ -1,4 +1,4 @@
-# dashboard.py - VERSÃO FINAL (Login Profissional, Fundo Local, Sem Logo)
+# dashboard.py - VERSÃO FINAL (Login Centralizado e Robusto)
 
 import streamlit as st
 import pandas as pd
@@ -19,7 +19,7 @@ except ImportError:
         def __init__(self, api_key): pass
 
 # -----------------------------------------------------------------------------
-# 1. SEÇÃO DE AUTENTICAÇÃO (VERSÃO ROBUSTA COM IMAGEM LOCAL)
+# 1. SEÇÃO DE AUTENTICAÇÃO (CSS APRIMORADO)
 # -----------------------------------------------------------------------------
 
 @st.cache_data
@@ -32,7 +32,7 @@ def get_local_img_as_base64(file_path):
         return None
 
 def login_page():
-    """Renderiza a página de login com fundo carregado localmente."""
+    """Renderiza a página de login com fundo, centralização e layout aprimorados."""
     
     img_base64 = get_local_img_as_base64("background.jpg")
 
@@ -44,27 +44,37 @@ def login_page():
 
     page_style = f"""
     <style>
-    [data-testid="stAppViewContainer"] > .main {{ {background_style} }}
-    [data-testid="stHeader"] {{ background: rgba(0,0,0,0); }}
-    .login-box {{
+    /* Remove o espaço em branco no topo da página */
+    .block-container {{
+        padding-top: 0rem;
+    }}
+    [data-testid="stAppViewContainer"] > .main {{
+        {background_style}
+        /* Centraliza o conteúdo verticalmente */
         display: flex;
         flex-direction: column;
-        align-items: center;
         justify-content: center;
-        background: rgba(10, 25, 40, 0.8);
-        padding: 3rem; /* Aumenta o padding vertical */
+        align-items: center;
+        height: 100vh;
+    }}
+    [data-testid="stHeader"] {{ background: rgba(0,0,0,0); }}
+
+    /* Caixa de login com largura máxima */
+    .login-box {{
+        background: rgba(10, 25, 40, 0.85);
+        padding: 2rem 3rem;
         border-radius: 15px;
         border: 1px solid rgba(255, 255, 255, 0.2);
-        box-shadow: 0 8px 16px rgba(0, 0, 0, 0.4);
+        box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
         color: white;
-        max-width: 450px;
-        margin: auto;
+        width: 100%;
+        max-width: 450px; /* Define a largura máxima */
     }}
     .login-box h1 {{
         color: white;
         text-align: center;
-        font-size: 2rem; /* Título um pouco maior */
-        margin-bottom: 2rem; /* Mais espaço abaixo do título */
+        font-size: 2rem;
+        margin-bottom: 2rem;
     }}
     .login-box .stTextInput > div > div > input {{
         background-color: rgba(255, 255, 255, 0.1);
@@ -77,7 +87,7 @@ def login_page():
         background-color: #0068C9;
         color: white;
         font-weight: bold;
-        margin-top: 1rem; /* Espaço acima do botão */
+        margin-top: 1rem;
     }}
     </style>
     """
@@ -86,23 +96,23 @@ def login_page():
     if not img_base64:
         st.warning("Arquivo 'background.jpg' não encontrado. Usando cor de fundo padrão.")
 
-    with st.container():
-        st.markdown('<div class="login-box">', unsafe_allow_html=True)
-        
-        st.markdown("<h1>Plataforma de Inteligência Marítima</h1>", unsafe_allow_html=True)
-        
-        username = st.text_input("Usuário", key="login_username", label_visibility="collapsed", placeholder="Usuário")
-        password = st.text_input("Senha", type="password", key="login_password", label_visibility="collapsed", placeholder="Senha")
-        
-        if st.button("Entrar", key="login_button"):
-            if username == st.secrets.get("username") and password == st.secrets.get("password"):
-                st.session_state["authenticated"] = True
-                st.session_state["username_display"] = username
-                st.rerun()
-            else:
-                st.error("😕 Usuário ou senha incorretos.")
-        
-        st.markdown('</div>', unsafe_allow_html=True)
+    # O container agora é apenas para o formulário, o CSS cuida da centralização
+    st.markdown('<div class="login-box">', unsafe_allow_html=True)
+    
+    st.markdown("<h1>Plataforma de Inteligência Marítima</h1>", unsafe_allow_html=True)
+    
+    username = st.text_input("Usuário", key="login_username", label_visibility="collapsed", placeholder="Usuário")
+    password = st.text_input("Senha", type="password", key="login_password", label_visibility="collapsed", placeholder="Senha")
+    
+    if st.button("Entrar", key="login_button"):
+        if username == st.secrets.get("username") and password == st.secrets.get("password"):
+            st.session_state["authenticated"] = True
+            st.session_state["username_display"] = username
+            st.rerun()
+        else:
+            st.error("😕 Usuário ou senha incorretos.")
+    
+    st.markdown('</div>', unsafe_allow_html=True)
 
 def check_authentication():
     if not st.session_state.get("authenticated", False):
@@ -119,13 +129,13 @@ st.set_page_config(page_title="Central de Inteligência Marítima", page_icon="�
 if not check_authentication():
     st.stop()
 
+# (O restante do seu código para as abas, sidebar, etc., continua aqui, sem alterações)
 st.sidebar.header(f"Bem-vindo, {st.session_state.get('username_display', 'Usuário')}!")
 st.sidebar.markdown("---")
 st.title("🚢 Central de Inteligência Marítima")
 
 tab_monitoramento, tab_exploracao = st.tabs(["📍 Monitoramento de Frota", "🌍 Exploração Global"])
 
-# (O restante do seu código para as abas continua aqui, exatamente como antes)
 with tab_monitoramento:
     st.header("Monitoramento da Frota Estratégica")
     DATA_FILE_FROTA = "mock_dados_frota.csv"
