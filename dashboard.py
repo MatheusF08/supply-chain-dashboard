@@ -157,16 +157,25 @@ with tab_monitoramento:
                 st.warning("Nenhum dado para exibir nos gráficos com os filtros atuais.")
 
 
-# -----------------------------------------------------------------------------
-# ABA 2: EXPLORAÇÃO GLOBAL (Nova funcionalidade)
-# -----------------------------------------------------------------------------
+# ABA 2: EXPLORAÇÃO GLOBAL (Código NOVO com busca por "Enter")
 with tab_exploracao:
     st.header("🔎 Encontre Navios por Porto")
     st.write("Use esta ferramenta para análises de mercado, concorrência ou para encontrar navios em locais específicos.")
     
-    porto_input = st.text_input("Digite o nome de um porto (ex: Santos, Roterdã, Xangai)", key="porto_input")
-    
-    if st.button("Buscar Navios no Porto", key="buscar_porto_btn"):
+    # --- INÍCIO DA MUDANÇA ---
+    # Criamos um formulário que engloba o campo de texto e o botão
+    with st.form(key="search_form"):
+        porto_input = st.text_input(
+            "Digite o nome de um porto e pressione Enter ou clique em Buscar", 
+            key="porto_input"
+        )
+        
+        # O botão agora é um "submit_button" do formulário
+        submitted = st.form_submit_button("Buscar Navios no Porto")
+    # --- FIM DA MUDANÇA ---
+
+    # A lógica da busca agora é acionada se o formulário for submetido
+    if submitted:
         if not porto_input:
             st.warning("Por favor, digite o nome de um porto.")
         else:
@@ -185,3 +194,4 @@ with tab_exploracao:
                     st.subheader("Localização no Mapa")
                     df_mapa = df_resultados_porto.rename(columns={"LAT": "lat", "LON": "lon"})
                     st.map(df_mapa)
+
