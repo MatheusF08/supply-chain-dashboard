@@ -1,57 +1,57 @@
 # providers/marinetraffic_provider.py
 
-import requests
-import time
-from .base_provider import VesselDataProvider
+import pandas as pd
+import os
+from .base_provider import BaseVesselProvider
 
-class MarineTrafficProvider(VesselDataProvider):
+class MarineTrafficProvider(BaseVesselProvider):
     """
-    Implementação do provedor de dados usando a API legada da MarineTraffic.
+    Implementação concreta para buscar dados da MarineTraffic (ou simular).
     """
     def __init__(self, api_key: str):
-        if not api_key or "SUA_CHAVE" in api_key:
-            raise ValueError("A chave da API da MarineTraffic é necessária e não foi configurada corretamente.")
         self.api_key = api_key
-        # A chave da API vai diretamente na URL para este serviço
-        self.base_url = f"https://services.marinetraffic.com/api/exportvessel/{self.api_key}/v:6"
+        print("🚢 Provedor MarineTraffic inicializado.")
 
-    def get_vessel_data(self, imo_list: list ) -> list:
-        all_vessel_data = []
-        print(f"🚢 Usando o provedor: MarineTraffic")
+    def get_vessel_data(self, imo_list: list) -> pd.DataFrame:
+        """
+        Simula a busca de dados para uma lista de IMOs.
+        Para o MVP, lê os dados do arquivo MOCK.
+        """
+        print(f"🔎 Buscando dados para {len(imo_list)} navios via MarineTraffic (simulação)...")
         
-        for idx, imo in enumerate(imo_list, start=1):
-            print(f"  [{idx}/{len(imo_list)}] Buscando dados para o IMO: {imo}")
-            # Monta a URL completa para a requisição
-            url = f"{self.base_url}/timespan:1440/imo:{imo}/protocol:jsono"
-            
-            try:
-                response = requests.get(url)
-                if response.status_code == 200:
-                    data = response.json()
-                    if isinstance(data, list) and data:
-                        # A API retorna uma lista de posições, pegamos a mais recente (a primeira)
-                        latest_record = data[0]
-                        latest_record['IMO'] = imo # Garante que o IMO está presente
-                        latest_record['SOURCE'] = 'MarineTraffic' # Adiciona a origem do dado
-                        all_vessel_data.append(latest_record)
-                        print(f"  ✅  Sucesso! Dados recebidos para o IMO {imo}.")
-                    else:
-                        print(f"  ⚠️  Sucesso, mas nenhum dado retornado para o IMO {imo}.")
-                else:
-                    # Tenta decodificar a mensagem de erro se não for 200
-                    error_message = response.text
-                    try:
-                        error_json = response.json()
-                        if 'description' in error_json:
-                            error_message = error_json['description']
-                    except:
-                        pass # Mantém a mensagem de texto se não for JSON
-                    print(f"  ❌  Falha na requisição para o IMO {imo}: {response.status_code} - {error_message}")
+        # Em um cenário real, aqui iria o código para chamar a API da MarineTraffic
+        # usando self.api_key e a imo_list.
+        
+        # Simulação:
+        mock_file = "mock_dados_frota.csv"
+        if os.path.exists(mock_file):
+            df = pd.read_csv(mock_file)
+            # Filtra o dataframe para conter apenas os IMOs da lista
+            resultados = df[df['IMO'].isin(imo_list)]
+            print(f"✅ {len(resultados)} navios encontrados nos dados MOCK.")
+            return resultados
+        
+        print("⚠️ Arquivo MOCK não encontrado. Retornando vazio.")
+        return pd.DataFrame()
 
-            except Exception as e:
-                print(f"  ❌  Ocorreu uma exceção para o IMO {imo}: {e}")
+    def find_vessels_by_port(self, port_name: str) -> pd.DataFrame:
+        """
+        Simula a busca de navios em um porto específico.
+        Para o MVP, filtra os dados do arquivo MOCK.
+        """
+        print(f"🔎 Buscando navios no porto '{port_name}' via MarineTraffic (simulação)...")
+        
+        # Em um cenário real, aqui iria o código para chamar a API
+        # com um endpoint de busca por porto.
+        
+        # Simulação:
+        mock_file = "mock_dados_frota.csv"
+        if os.path.exists(mock_file):
+            df = pd.read_csv(mock_file)
+            # Filtra o dataframe pelo nome do porto (ignorando maiúsculas/minúsculas)
+            resultados = df[df['Porto de Destino'].str.contains(port_name, case=False, na=False)]
+            print(f"✅ {len(resultados)} navios encontrados para '{port_name}' nos dados MOCK.")
+            return resultados
             
-            if idx < len(imo_list):
-                time.sleep(1) # Pausa de 1 segundo para não sobrecarregar a API
-
-        return all_vessel_data
+        print("⚠️ Arquivo MOCK não encontrado. Retornando vazio.")
+        return pd.DataFrame()

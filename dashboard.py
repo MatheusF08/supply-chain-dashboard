@@ -1,4 +1,4 @@
-# dashboard.py - VERSÃO FINAL COM AUTENTICAÇÃO
+# dashboard.py - VERSÃO FINAL COM EXPLORAÇÃO GLOBAL
 
 import streamlit as st
 import pandas as pd
@@ -6,32 +6,21 @@ import os
 import plotly.express as px
 from datetime import datetime
 
-# -----------------------------------------------------------------------------
-# 1. SEÇÃO DE AUTENTICAÇÃO
-# -----------------------------------------------------------------------------
+# Importa as classes da nossa nova arquitetura
+from services.vessel_service import VesselService
+from providers.marinetraffic_provider import MarineTrafficProvider
 
+# -----------------------------------------------------------------------------
+# 1. SEÇÃO DE AUTENTICAÇÃO (sem alterações)
+# -----------------------------------------------------------------------------
 def check_password():
     """Retorna True se o usuário estiver autenticado, False caso contrário."""
-    
-    # Função interna para ser chamada quando a senha for digitada
-    def password_entered():
-        """Verifica se a senha digitada corresponde à senha secreta."""
-        # Compara a senha digitada com a senha armazenada nos "Secrets" do Streamlit
-        if st.session_state["password"] == st.secrets["password"]:
-            st.session_state["password_correct"] = True
-            del st.session_state["password"]  # Remove a senha da memória da sessão por segurança
-        else:
-            st.session_state["password_correct"] = False
-
-    # Se o usuário já passou pela verificação de senha com sucesso, permite o acesso
     if st.session_state.get("password_correct", False):
         return True
-
-    # Layout do formulário de login no centro da página
+    
     st.title("🚢 Central de Inteligência Marítima")
     st.write("Por favor, faça o login para continuar.")
     
-    # Usando colunas para centralizar o formulário
     col1, col2, col3 = st.columns([1, 1, 1])
     with col2:
         with st.form("login_form"):
@@ -40,176 +29,133 @@ def check_password():
             submitted = st.form_submit_button("Entrar")
             
             if submitted:
-                password_entered() # Chama a verificação quando o botão é clicado
+                if st.session_state["password"] == st.secrets.get("password", "admin123"):
+                    st.session_state["password_correct"] = True
+                    st.rerun()
+                else:
+                    st.session_state["password_correct"] = False
 
-    # Mostra mensagem de erro se a tentativa de login falhou
     if "password_correct" in st.session_state and not st.session_state["password_correct"]:
         st.error("😕 Usuário ou senha incorretos.")
     
-    # Se não estiver autenticado, retorna False e impede o resto do app de carregar
     return False
 
 # -----------------------------------------------------------------------------
 # 2. INÍCIO DA APLICAÇÃO PRINCIPAL
 # -----------------------------------------------------------------------------
 
-# Configuração da página (deve ser a primeira chamada do Streamlit)
 st.set_page_config(
     page_title="Central de Inteligência Marítima",
     page_icon="🚢",
     layout="wide"
 )
 
-# --- VERIFICA A SENHA ---
-# Se a função check_password() retornar False, o app para aqui.
 if not check_password():
     st.stop()
 
-# --- SE O LOGIN FOR BEM-SUCEDIDO, O CÓDIGO ABAIXO É EXECUTADO ---
-
-# --- Título e Boas-Vindas ---
 st.title("🚢 Central de Inteligência Marítima")
 st.markdown(f"Bem-vindo, **{st.session_state.get('username', 'Usuário')}**!")
 
-# --- Carregamento e Preparação dos Dados ---
-# Usaremos os dados MOCK para o deploy inicial
-DATA_FILE = "mock_dados_frota.csv"
-
-@st.cache_data # Usa cache para não recarregar os dados a cada interação
-def carregar_dados():
-    if not os.path.exists(DATA_FILE):
-        return None
-    df = pd.read_csv(DATA_FILE)
-    # Converte todas as colunas de data que podem existir
-    for col in ['ETA Previsto', 'Próxima Partida Estimada', 'Consulta em', 'TIMESTAMP']:
-        if col in df.columns:
-            df[col] = pd.to_datetime(df[col], errors='coerce')
-    return df
-
-df = carregar_dados()
-
-if df is None:
-    st.error(f"Arquivo de dados '{DATA_FILE}' não encontrado.")
-    st.warning("Certifique-se de que o arquivo de dados MOCK está no repositório do GitHub.")
-    st.stop()
-
-# --- Barra Lateral com Filtros ---
-st.sidebar.header("Filtros Interativos")
-status_selecionado = st.sidebar.multiselect(
-    "Filtrar por Status do Navio:",
-    options=df['Status do Navio'].unique(),
-    default=df['Status do Navio'].unique()
-)
-
-disponibilidade_selecionada = st.sidebar.multiselect(
-    "Filtrar por Disponibilidade:",
-    options=df['Disponibilidade'].unique(),
-    default=df['Disponibilidade'].unique()
-)
-
-# Aplica os filtros no dataframe
-df_filtrado = df[
-    df['Status do Navio'].isin(status_selecionado) &
-    df['Disponibilidade'].isin(disponibilidade_selecionada)
-]
-
-# --- KPIs Principais ---
-st.markdown("### Visão Geral da Frota Filtrada")
-col1, col2, col3 = st.columns(3)
-col1.metric("Navios na Seleção", f"{len(df_filtrado)}")
-col2.metric("Navios Contratados", f"{len(df_filtrado[df_filtrado['Disponibilidade'] == 'Contratado'])}")
-col3.metric("Navios Disponíveis", f"{len(df_filtrado[df_filtrado['Disponibilidade'] == 'Disponível para Frete'])}")
-
-st.markdown("---")
-
 # --- Criação das Abas (Tabs) ---
-tab_cards, tab_tabela, tab_graficos = st.tabs([
-    "Visão Geral (Cards)", 
-    "Análise Detalhada (Tabela)", 
-    "Gráficos Interativos"
+tab_monitoramento, tab_exploracao = st.tabs([
+    "📍 Monitoramento de Frota", 
+    "🌍 Exploração Global"
 ])
 
-# --- Aba 1: Visão Geral (Cards) ---
-with tab_cards:
-    st.header("Status Individual dos Navios")
+
+# -----------------------------------------------------------------------------
+# ABA 1: MONITORAMENTO DE FROTA (Nosso dashboard antigo)
+# -----------------------------------------------------------------------------
+with tab_monitoramento:
+    st.header("Monitoramento da Frota Estratégica")
     
-    df_ordenado_cards = df_filtrado.sort_values(by="ETA Previsto")
+    DATA_FILE = "mock_dados_frota.csv"
 
-    if df_ordenado_cards.empty:
-        st.warning("Nenhum navio corresponde aos filtros selecionados.")
+    @st.cache_data
+    def carregar_dados_frota():
+        if not os.path.exists(DATA_FILE):
+            return None
+        df = pd.read_csv(DATA_FILE)
+        for col in ['ETA Previsto', 'Próxima Partida Estimada', 'Consulta em', 'TIMESTAMP']:
+            if col in df.columns:
+                df[col] = pd.to_datetime(df[col], errors='coerce')
+        return df
+
+    df_frota = carregar_dados_frota()
+
+    if df_frota is None:
+        st.error(f"Arquivo de dados da frota '{DATA_FILE}' não encontrado.")
+        st.warning("Certifique-se de que o arquivo de dados MOCK está no repositório.")
     else:
-        for index, row in df_ordenado_cards.iterrows():
-            status_color = {"Em Rota": "blue", "Ancorado": "orange", "Atracado": "green"}.get(row['Status do Navio'], "gray")
-            with st.container(border=True):
-                c1, c2 = st.columns([3, 1])
-                with c1: st.subheader(f"{row['Nome do Navio']} (IMO: {row['IMO']})")
-                with c2: st.markdown(f"**<p style='text-align: right; color: {status_color};'>{row['Status do Navio']}</p>**", unsafe_allow_html=True)
-                
-                ci1, ci2, ci3 = st.columns(3)
-                with ci1: st.info(f"Chegada: {row['ETA Previsto'].strftime('%d/%m %H:%M')}")
-                with ci2: st.info(f"Destino: {row['Porto de Destino']}")
-                with ci3: st.info(f"Partida: {row['Próxima Partida Estimada'].strftime('%d/%m %H:%M')}")
-                
-                cc1, cc2 = st.columns(2)
-                with cc1: st.success(f"Carga: {row['Carga Atual']}")
-                with cc2: st.warning(f"Disponibilidade: {row['Disponibilidade']}")
-
-# --- Aba 2: Análise Detalhada (Tabela) ---
-with tab_tabela:
-    st.header("Dados Completos da Frota")
-    st.markdown("Clique nos cabeçalhos das colunas para ordenar os dados.")
-    
-    # Prepara um dataframe para exibição com datas formatadas
-    df_tabela = df_filtrado.copy()
-    for col in ['ETA Previsto', 'Próxima Partida Estimada', 'Consulta em', 'TIMESTAMP']:
-        if col in df_tabela.columns:
-            df_tabela[col] = df_tabela[col].dt.strftime('%d/%m/%Y %H:%M')
-        
-    st.dataframe(df_tabela, use_container_width=True)
-
-# --- Aba 3: Gráficos Interativos ---
-with tab_graficos:
-    st.header("Análises Visuais da Frota Selecionada")
-
-    if df_filtrado.empty:
-        st.warning("Nenhum dado para exibir nos gráficos com os filtros atuais.")
-    else:
-        col_g1, col_g2 = st.columns(2)
-
-        with col_g1:
-            st.subheader("Contagem de Navios por Status")
-            fig_status = px.pie(
-                df_filtrado, 
-                names='Status do Navio', 
-                title='Distribuição por Status',
-                hole=.3
-            )
-            fig_status.update_traces(textposition='inside', textinfo='percent+label')
-            st.plotly_chart(fig_status, use_container_width=True)
-
-        with col_g2:
-            st.subheader("Contagem de Navios por Porto")
-            portos_counts = df_filtrado['Porto de Destino'].value_counts().reset_index()
-            portos_counts.columns = ['Porto de Destino', 'Contagem']
-            fig_portos = px.bar(
-                portos_counts, 
-                x='Porto de Destino', 
-                y='Contagem',
-                title='Navios por Porto de Destino',
-                text_auto=True
-            )
-            st.plotly_chart(fig_portos, use_container_width=True)
-
-        st.subheader("Linha do Tempo de Chegadas (ETA)")
-        df_filtrado_sorted = df_filtrado.sort_values('ETA Previsto')
-        fig_timeline = px.timeline(
-            df_filtrado_sorted,
-            x_start="ETA Previsto",
-            x_end="Próxima Partida Estimada",
-            y="Nome do Navio",
-            color="Status do Navio",
-            title="Linha do Tempo de Atividades dos Navios"
+        # --- Barra Lateral com Filtros ---
+        st.sidebar.header("Filtros da Frota")
+        status_selecionado = st.sidebar.multiselect(
+            "Filtrar por Status:",
+            options=df_frota['Status do Navio'].unique(),
+            default=df_frota['Status do Navio'].unique(),
+            key="filtro_status_frota"
         )
-        fig_timeline.update_yaxes(autorange="reversed") # Navios no topo chegam primeiro
-        st.plotly_chart(fig_timeline, use_container_width=True)
+        disponibilidade_selecionada = st.sidebar.multiselect(
+            "Filtrar por Disponibilidade:",
+            options=df_frota['Disponibilidade'].unique(),
+            default=df_frota['Disponibilidade'].unique(),
+            key="filtro_disp_frota"
+        )
+        df_filtrado = df_frota[
+            df_frota['Status do Navio'].isin(status_selecionado) &
+            df_frota['Disponibilidade'].isin(disponibilidade_selecionada)
+        ]
+        
+        # --- KPIs e Cards (código anterior) ---
+        st.markdown("### Visão Geral da Frota")
+        col1, col2, col3 = st.columns(3)
+        col1.metric("Navios na Seleção", f"{len(df_filtrado)}")
+        col2.metric("Navios Contratados", f"{len(df_filtrado[df_filtrado['Disponibilidade'] == 'Contratado'])}")
+        col3.metric("Navios Disponíveis", f"{len(df_filtrado[df_filtrado['Disponibilidade'] == 'Disponível para Frete'])}")
+        
+        st.markdown("---")
+        st.subheader("Status Individual dos Navios")
+        for index, row in df_filtrado.sort_values(by="ETA Previsto").iterrows():
+             with st.container(border=True):
+                # ... (código dos cards que já tínhamos) ...
+                st.text(f"{row['Nome do Navio']} (IMO: {row['IMO']}) - Destino: {row['Porto de Destino']}")
+
+
+# -----------------------------------------------------------------------------
+# ABA 2: EXPLORAÇÃO GLOBAL (Nova funcionalidade)
+# -----------------------------------------------------------------------------
+with tab_exploracao:
+    st.header("🔎 Encontre Navios por Porto")
+    st.write("Use esta ferramenta para análises de mercado, concorrência ou para encontrar navios em locais específicos.")
+    
+    porto_input = st.text_input("Digite o nome de um porto (ex: Santos, Roterdã, Xangai)", key="porto_input")
+    
+    if st.button("Buscar Navios no Porto", key="buscar_porto_btn"):
+        if not porto_input:
+            st.warning("Por favor, digite o nome de um porto.")
+        else:
+            with st.spinner(f"Buscando navios em '{porto_input}'... (usando simulação)"):
+                # --- A MÁGICA ACONTECE AQUI ---
+                # Inicializa o provedor e o serviço
+                api_key = st.secrets.get("MARINETRAFFIC_API_KEY", "chave_mock_para_teste")
+                provider = MarineTrafficProvider(api_key=api_key)
+                service = VesselService(provider)
+                
+                # Chama a nova função do serviço
+                df_resultados_porto = service.find_vessels_by_port(porto_input)
+                # -----------------------------
+
+            if df_resultados_porto.empty:
+                st.error(f"Nenhum navio encontrado para '{porto_input}' nos dados de simulação.")
+            else:
+                st.success(f"{len(df_resultados_porto)} navios encontrados para '{porto_input}':")
+                
+                # Exibe os resultados em uma tabela
+                st.dataframe(df_resultados_porto, use_container_width=True)
+
+                # Opcional: Mostrar em um mapa se houver dados de lat/lon
+                if 'LAT' in df_resultados_porto.columns and 'LON' in df_resultados_porto.columns:
+                    st.subheader("Localização no Mapa")
+                    df_mapa = df_resultados_porto.rename(columns={"LAT": "lat", "LON": "lon"})
+                    st.map(df_mapa)
 

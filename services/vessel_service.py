@@ -1,26 +1,24 @@
 # services/vessel_service.py
 
-from providers.base_provider import VesselDataProvider
 import pandas as pd
+from providers.base_provider import BaseVesselProvider
 
 class VesselService:
     """
-    Serviço responsável por orquestrar a busca de dados de navios.
-    Ele usa um 'provider' para buscar os dados, abstraindo a fonte.
+    Orquestra a obtenção de dados de navios, usando um provedor específico.
     """
-    def __init__(self, provider: VesselDataProvider):
+    def __init__(self, provider: BaseVesselProvider):
         self.provider = provider
+        print("✅ Serviço de Navios pronto para operar.")
 
     def get_fleet_data(self, imo_list: list) -> pd.DataFrame:
         """
-        Busca os dados da frota e já retorna como um DataFrame do Pandas.
+        Busca dados para uma frota específica.
         """
-        print(f"🛠️  Serviço de Navios iniciado...")
-        
-        raw_data = self.provider.get_vessel_data(imo_list)
-        
-        if not raw_data:
-            return pd.DataFrame() # Retorna um DataFrame vazio se não houver dados
-            
-        return pd.DataFrame(raw_data)
+        return self.provider.get_vessel_data(imo_list)
 
+    def find_vessels_by_port(self, port_name: str) -> pd.DataFrame:
+        """
+        Busca navios em um porto específico.
+        """
+        return self.provider.find_vessels_by_port(port_name)
