@@ -1,81 +1,30 @@
-# processar_antaq.py (VERSÃO FINALÍSSIMA - CORRIGINDO A SELEÇÃO DE COLUNAS)
+# dashboard.py (VERSÃO DE TESTE MÍNIMA)
 
-import pandas as pd
-import requests
-import zipfile
-import io
-import os
+import streamlit as st
 
-def baixar_e_processar_dados_antaq(ano: int):
-    print(f"Iniciando o processo para o ano de {ano}...")
-    print("Isso pode levar vários minutos, por favor, aguarde...")
+# Sem Pandas, sem Plotly, sem carregar arquivos. Apenas Streamlit puro.
 
-    url = f"https://web3.antaq.gov.br/ea/txt/{ano}.zip"
-    nome_arquivo_txt = f"{ano}Atracacao.txt"
-    arquivo_saida_csv = "dados_portuarios.csv"
+def check_password():
+    """Função de login simplificada para teste."""
+    if st.session_state.get("password_correct", False):
+        return True
 
-    try:
-        print(f"Baixando dados de: {url}" )
-        response = requests.get(url, stream=True, timeout=300)
-        response.raise_for_status()
-        
-        print("Download concluído. Descompactando e lendo o arquivo...")
-        with zipfile.ZipFile(io.BytesIO(response.content)) as z:
-            with z.open(nome_arquivo_txt) as f:
-                df = pd.read_csv(f, delimiter=';', encoding='utf-8-sig', decimal=',', low_memory=False)
-    except Exception as e:
-        print(f"ERRO: Falha ao baixar ou processar o arquivo. Detalhes: {e}")
-        return
+    st.title("🚢 Teste de Inicialização")
+    with st.form("login_form"):
+        st.text_input("Usuário", key="username")
+        st.text_input("Senha", type="password", key="password")
+        if st.form_submit_button("Entrar"):
+            # Para este teste, qualquer login funciona.
+            st.session_state["password_correct"] = True
+            st.rerun()
+    return False
 
-    print("Dados brutos carregados. Iniciando limpeza e transformação...")
-    
-    df.columns = df.columns.str.replace('Ã§', 'c').str.replace('Ã£', 'a').str.replace('Ã\xad', 'i')
-    
-    mapa_de_nomes = {
-        'Porto Atracação': 'Porto',
-        'Tipo de Navegação da Atracação': 'Navegacao',
-        'Data Chegada': 'Chegada',
-        'Data Atracação': 'Atracacao',
-        'Data Desatracação': 'Desatracacao',
-        'TEsperAtra': 'TempoEsperaAtracacao',
-        'TEsperaOp': 'TempoEsperaOperacao',
-        'TAtracado': 'TempoAtracado',
-        'TEstadia': 'TempoEstadia',
-        'Carga Total': 'CargaTotal'
-    }
+st.set_page_config(page_title="Teste de Dashboard", layout="wide")
 
-    df.rename(columns=mapa_de_nomes, inplace=True)
+if not check_password():
+    st.stop()
 
-    colunas_essenciais = ['Chegada', 'Atracacao', 'Desatracacao', 'Porto', 'TempoEsperaAtracacao', 'TempoAtracado']
-    
-    colunas_faltando = [col for col in colunas_essenciais if col not in df.columns]
-    if colunas_faltando:
-        print(f"ERRO CRÍTICO: As seguintes colunas essenciais não foram encontradas: {colunas_faltando}")
-        return
+# Se o login funcionar, mostre apenas um título.
+st.title("✅ Sucesso! A aplicação base está funcionando.")
+st.balloons()
 
-    for col in ['Chegada', 'Atracacao', 'Desatracacao']:
-        df[col] = pd.to_datetime(df[col], format='%d/%m/%Y %H:%M:%S', errors='coerce')
-
-    df.dropna(subset=colunas_essenciais, inplace=True)
-    
-    # --- A CORREÇÃO ESTÁ AQUI ---
-    # Em vez de uma lista fixa, vamos salvar todas as colunas que renomeamos e que existem.
-    colunas_para_salvar = [col for col in mapa_de_nomes.values() if col in df.columns]
-    
-    # Adiciona 'Complexo Portuário' se ele existir, pois é útil.
-    if 'Complexo Portuário' in df.columns:
-        colunas_para_salvar.insert(1, 'Complexo Portuário')
-
-    df_final = df[colunas_para_salvar]
-
-    df_final.to_csv(arquivo_saida_csv, index=False)
-    
-    print("-" * 50)
-    print(f"SUCESSO! Arquivo '{arquivo_saida_csv}' salvo com {len(df_final)} registros.")
-    print("Colunas salvas:", df_final.columns.tolist()) # Mostra as colunas que foram realmente salvas
-    print("Agora você pode prosseguir para o Passo 2: atualizar o dashboard.py.")
-    print("-" * 50)
-
-if __name__ == "__main__":
-    ano_para_processar = 2023 
-    baixar_e_processar_dados_antaq(ano_para_processar)
