@@ -35,15 +35,22 @@ jobs:
           pip install -r requirements.txt
 
       # Passo 4: Executa o pipeline para gerar o arquivo de dados
+      # Adicionamos 'continue-on-error: true' para que o workflow não pare se o pipeline falhar
+      # (por exemplo, se a chave da API for inválida)
       - name: Rodar o pipeline de dados
+        id: run_pipeline # Damos um ID a este passo para verificar seu resultado depois
+        continue-on-error: true
         run: python pipeline.py
         env:
           # Mapeia o GitHub Secret para a variável de ambiente que o script espera
           MARINETRAFFIC_API_KEY: ${{ secrets.MARINETRAFFIC_API_KEY }}
 
       # Passo 5: Faz o commit e push do novo arquivo de dados para o repositório
+      # Este passo só será executado se o passo anterior (run_pipeline) tiver sido bem-sucedido
       - name: Commit e Push dos novos dados
+        if: steps.run_pipeline.outcome == 'success'
         run: |
+          echo "Pipeline executado com sucesso. Verificando por novos dados..."
           git config --global user.name "GitHub Actions Bot"
           git config --global user.email "actions@github.com"
           git add dados_reais_frota.csv
