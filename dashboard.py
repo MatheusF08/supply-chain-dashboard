@@ -1,4 +1,14 @@
-# dashboard.py - VERSÃO COM DADOS REAIS (POC), DATAS RELATIVAS E LOGOUT
+# dashboard.py - VERSÃO COM TABELA COLORIDA E MELHORIAS DE UX
+
+import streamlit as st
+import pandas as pd
+import os
+import plotly.express as px
+from datetime import datetime, timedelta
+
+# (O início do código permanece o mesmo: imports, autenticação, etc.)
+# ... (código das funções check_password, formatar_data_relativa, etc. sem alteração) ...
+# dashboard.py - VERSÃO COM TABELA COLORIDA E MELHORIAS DE UX
 
 import streamlit as st
 import pandas as pd
@@ -47,20 +57,15 @@ def check_password():
 # -----------------------------------------------------------------------------
 
 def formatar_data_relativa(dt):
-    """Formata uma data para um formato relativo (ex: 'há 2 horas')."""
-    if pd.isna(dt):
-        return "desconhecido"
-    agora = datetime.now(dt.tz) # Garante que estamos comparando com o mesmo timezone
+    if pd.isna(dt): return "desconhecido"
+    agora = datetime.now(dt.tz)
     diferenca = agora - dt
     segundos = diferenca.total_seconds()
-    if segundos < 60:
-        return "agora mesmo"
+    if segundos < 60: return "agora mesmo"
     minutos = round(segundos / 60)
-    if minutos < 60:
-        return f"há {minutos} min"
+    if minutos < 60: return f"há {minutos} min"
     horas = round(minutos / 60)
-    if horas < 24:
-        return f"há {horas}h"
+    if horas < 24: return f"há {horas}h"
     dias = round(horas / 24)
     return f"há {dias} dias"
 
@@ -70,17 +75,28 @@ def carregar_dados_frota(caminho_arquivo):
     df = pd.read_csv(caminho_arquivo)
     for col in ['ETA Previsto', 'Próxima Partida Estimada', 'Consulta em']:
         if col in df.columns:
-            # Converte para datetime com timezone UTC, que é o padrão do GitHub Actions
             df[col] = pd.to_datetime(df[col], utc=True, errors='coerce')
     return df
 
 @st.cache_data
 def carregar_lista_de_portos(caminho_arquivo):
-    """Carrega uma lista de portos para o autocomplete."""
     df_frota = carregar_dados_frota(caminho_arquivo)
     if df_frota is not None and 'Porto de Destino' in df_frota.columns:
         return sorted(df_frota['Porto de Destino'].unique().tolist())
     return ["Santos", "Paranaguá", "Rio Grande", "Itajaí", "Navegantes", "Suape", "Pecém", "Manaus"]
+
+# NOVA FUNÇÃO PARA ESTILIZAR A TABELA
+def estilizar_tabela(df):
+    """Aplica cores às linhas da tabela com base no status do navio."""
+    def highlight_status(row):
+        status = row['Status do Navio']
+        if status == 'Atracado':
+            return ['background-color: #2E7D32; color: white'] * len(row) # Verde escuro
+        elif status == 'Ancorado':
+            return ['background-color: #FF8F00; color: black'] * len(row) # Laranja
+        return [''] * len(row)
+    
+    return df.style.apply(highlight_status, axis=1)
 
 # -----------------------------------------------------------------------------
 # 3. INÍCIO DA APLICAÇÃO PRINCIPAL
@@ -91,7 +107,6 @@ st.set_page_config(page_title="Central de Inteligência Marítima", page_icon="�
 if not check_password():
     st.stop()
 
-# --- BARRA LATERAL COM LOGOUT ---
 st.sidebar.header(f"Bem-vindo, {st.session_state.get('username', 'Usuário')}!")
 if st.sidebar.button("Sair (Logout)"):
     st.session_state["password_correct"] = False
@@ -102,7 +117,6 @@ st.sidebar.markdown("---")
 
 st.title("🚢 Central de Inteligência Marítima")
 
-# --- MUDANÇA PRINCIPAL: USANDO O ARQUIVO DE DADOS REAIS (POC) ---
 DATA_FILE_FROTA = "poc_dados_frota.csv"
 df_frota = carregar_dados_frota(DATA_FILE_FROTA)
 lista_portos = carregar_lista_de_portos(DATA_FILE_FROTA)
@@ -110,13 +124,14 @@ lista_portos = carregar_lista_de_portos(DATA_FILE_FROTA)
 tab_monitoramento, tab_exploracao = st.tabs(["📍 Monitoramento de Frota", "🌍 Exploração Global"])
 
 # -----------------------------------------------------------------------------
-# ABA 1: MONITORAMENTO DE FROTA (COM DATAS RELATIVAS)
+# ABA 1: MONITORAMENTO DE FROTA
 # -----------------------------------------------------------------------------
 with tab_monitoramento:
     st.header("Monitoramento da Frota Estratégica")
     if df_frota is None:
-        st.error(f"Arquivo de dados da frota '{DATA_FILE_FROTA}' não encontrado.")
-        st.warning("O robô do GitHub Actions pode ainda não ter rodado. Verifique a aba 'Actions' no seu repositório.")
+        # MENSAGEM DE ERRO MELHORADA
+        st.error(f"Arquivo de dados da frota ('{DATA_FILE_FROTA}') não encontrado.")
+        st.warning("O robô de atualização de dados (GitHub Actions) pode ainda não ter rodado. Verifique a aba 'Actions' no seu repositório GitHub para ver o status da execução.")
     else:
         st.sidebar.header("Filtros da Frota")
         status_selecionado = st.sidebar.multiselect("Filtrar por Status:", options=df_frota['Status do Navio'].unique(), default=df_frota['Status do Navio'].unique())
@@ -141,26 +156,26 @@ with tab_monitoramento:
                         c1, c2 = st.columns([3, 1])
                         with c1: st.subheader(f"{row['Nome do Navio']} (IMO: {row['IMO']})")
                         with c2: st.markdown(f"**<p style='text-align: right; color: {status_color};'>{row['Status do Navio']}</p>**", unsafe_allow_html=True)
-                        
-                        # --- MUDANÇA: USANDO A DATA RELATIVA ---
                         tempo_consulta = formatar_data_relativa(row['Consulta em'])
                         st.caption(f"Última atualização: {tempo_consulta}")
-                        
                         ci1, ci2, ci3 = st.columns(3)
                         with ci1: st.info(f"Chegada: {row['ETA Previsto'].strftime('%d/%m %H:%M') if pd.notna(row['ETA Previsto']) else 'N/A'}")
                         with ci2: st.info(f"Destino: {row['Porto de Destino']}")
                         with ci3: st.info(f"Partida: {row['Próxima Partida Estimada'].strftime('%d/%m %H:%M') if pd.notna(row['Próxima Partida Estimada']) else 'N/A'}")
-                        
                         cc1, cc2 = st.columns(2)
                         with cc1: st.success(f"Carga: {row['Carga Atual']}")
                         with cc2: st.warning(f"Disponibilidade: {row['Disponibilidade']}")
         with sub_tab_tabela:
             st.subheader("Dados Completos da Frota")
+            # APLICA O ESTILO ANTES DE EXIBIR
             df_tabela = df_filtrado.copy()
             for col in ['ETA Previsto', 'Próxima Partida Estimada', 'Consulta em']:
                 if col in df_tabela.columns: df_tabela[col] = df_tabela[col].dt.strftime('%d/%m/%Y %H:%M')
-            st.dataframe(df_tabela, use_container_width=True)
+            
+            st.dataframe(estilizar_tabela(df_tabela), use_container_width=True)
+
         with sub_tab_graficos:
+            # ... (código dos gráficos sem alteração)
             st.subheader("Análises Visuais da Frota")
             if not df_filtrado.empty:
                 g1, g2 = st.columns(2)
@@ -176,6 +191,7 @@ with tab_monitoramento:
 # ABA 2: EXPLORAÇÃO GLOBAL
 # -----------------------------------------------------------------------------
 with tab_exploracao:
+    # ... (código da aba de exploração sem alteração)
     st.header("🔎 Encontre Navios por Porto")
     st.write("Use esta ferramenta para análises de mercado, concorrência ou para encontrar navios em locais específicos.")
     porto_selecionado = st.selectbox("Selecione um porto para buscar navios automaticamente:", options=lista_portos, index=None, placeholder="Selecione ou digite o nome do porto...")
