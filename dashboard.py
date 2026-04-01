@@ -1,19 +1,17 @@
-# dashboard.py - VERSÃO FINAL E COMPLETA
+# dashboard.py - VERSÃO FINAL E COMPLETA (com Login Profissional)
 
 import streamlit as st
 import pandas as pd
 import os
 import plotly.express as px
+import base64  # Importado para o novo login
 from datetime import datetime, timedelta
 
 # Importa as classes da nossa arquitetura
-# O 'try/except' é uma boa prática para não quebrar o app se a estrutura de pastas mudar
 try:
     from services.vessel_service import VesselService
     from providers.marinetraffic_provider import MarineTrafficProvider
 except ImportError:
-    # Se der erro na importação, definimos classes "dummy" para não quebrar o app
-    # Isso é útil para depuração, mas o ideal é ter a estrutura de pastas correta
     class VesselService:
         def __init__(self, provider): pass
         def find_vessels_by_port(self, port_name): return pd.DataFrame()
@@ -21,40 +19,118 @@ except ImportError:
         def __init__(self, api_key): pass
 
 # -----------------------------------------------------------------------------
-# 1. SEÇÃO DE AUTENTICAÇÃO
+# 1. SEÇÃO DE AUTENTICAÇÃO (NOVA VERSÃO PROFISSIONAL)
 # -----------------------------------------------------------------------------
-def check_password():
-    """Retorna True se o usuário estiver autenticado, False caso contrário."""
-    
-    def password_entered():
-        """Verifica se o usuário e a senha digitados correspondem aos secrets."""
-        # Usamos .get() para evitar erros se os secrets não estiverem configurados
-        if st.session_state.get("username") == st.secrets.get("username") and st.session_state.get("password") == st.secrets.get("password"):
-            st.session_state["password_correct"] = True
-        else:
-            st.session_state["password_correct"] = False
 
-    if st.session_state.get("password_correct", False):
-        return True
+@st.cache_data
+def get_img_as_base64(file):
+    """Função para carregar uma imagem local e converter para base64."""
+    # Tenta carregar .jpg e depois .png
+    if os.path.exists(file + ".jpg"):
+        file_path = file + ".jpg"
+    elif os.path.exists(file + ".png"):
+        file_path = file + ".png"
+    else:
+        return None # Retorna None se nenhum dos formatos for encontrado
+        
+    with open(file_path, "rb") as f:
+        data = f.read()
+    return base64.b64encode(data).decode()
 
-    # Centraliza o formulário de login
-    col1, col2, col3 = st.columns([1, 1.5, 1])
-    with col2:
-        with st.form("login_form"):
-            # Adicionando um logo genérico para profissionalizar
-            st.image("https://i.imgur.com/g0w5v9A.png", width=200 ) 
-            st.header("Plataforma de Inteligência Marítima")
-            st.text_input("Usuário", key="username")
-            st.text_input("Senha", type="password", key="password")
-            submitted = st.form_submit_button("Entrar")
-            
-            if submitted:
-                password_entered()
+def login_page():
+    """Renderiza a página de login com fundo de imagem e formulário estilizado."""
     
-    if "password_correct" in st.session_state and not st.session_state["password_correct"]:
-        st.error("😕 Usuário ou senha incorretos.")
+    # Carrega a imagem de fundo (procura por 'background.jpg' ou 'background.png')
+    img_base64 = get_img_as_base64("background")
+
+    # Define o CSS para o background e o estilo do formulário
+    background_style = f"""
+        background-image: url("data:image/jpeg;base64,{img_base64}");
+        background-size: cover;
+        background-position: center;
+    """ if img_base64 else "background-color: #1a1a2e;" # Cor de fundo fallback
+
+    page_style = f"""
+    <style>
+    /* Aplica o estilo de fundo ao container principal */
+    [data-testid="stAppViewContainer"] > .main {{
+        {background_style}
+    }}
+
+    /* Esconde o header padrão do Streamlit na tela de login */
+    [data-testid="stHeader"] {{
+        background: rgba(0,0,0,0);
+    }}
+
+    /* Estilo para a caixa de login centralizada */
+    .login-box {{
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        background: rgba(0, 0, 0, 0.75); /* Fundo preto semi-transparente */
+        padding: 2rem 3rem;
+        border-radius: 15px;
+        box-shadow: 0 8px 16px rgba(0, 0, 0, 0.4);
+        color: white;
+        max-width: 450px;
+        margin: auto; /* Centraliza a caixa */
+    }}
+
+    .login-box h1 {{
+        color: white;
+        text-align: center;
+        font-size: 1.8rem;
+        margin-bottom: 1.5rem;
+    }}
     
-    return False
+    /* Melhora a visibilidade dos inputs */
+    .login-box .stTextInput > div > div > input {{
+        background-color: rgba(255, 255, 255, 0.1);
+        color: white;
+        border: 1px solid rgba(255, 255, 255, 0.5);
+    }}
+    
+    /* Botão com mais destaque */
+    .login-box .stButton > button {{
+        width: 100%;
+        border-radius: 5px;
+        background-color: #0068C9; /* Azul padrão do Streamlit */
+        color: white;
+        font-weight: bold;
+    }}
+    </style>
+    """
+    st.markdown(page_style, unsafe_allow_html=True)
+    
+    if not img_base64:
+        st.warning("Arquivo 'background.jpg' ou 'background.png' não encontrado. Usando cor de fundo padrão.")
+
+    # Layout do formulário de login
+    with st.container():
+        st.markdown('<div class="login-box">', unsafe_allow_html=True)
+        st.image("https://i.imgur.com/g0w5v9A.png", width=150 ) # Logo
+        st.markdown("<h1>Plataforma de Inteligência Marítima</h1>", unsafe_allow_html=True)
+        
+        username = st.text_input("Usuário", key="login_username", label_visibility="collapsed", placeholder="Usuário")
+        password = st.text_input("Senha", type="password", key="login_password", label_visibility="collapsed", placeholder="Senha")
+        
+        if st.button("Entrar", key="login_button"):
+            if username == st.secrets.get("username") and password == st.secrets.get("password"):
+                st.session_state["authenticated"] = True
+                st.session_state["username_display"] = username # Salva o nome para exibir depois
+                st.rerun()
+            else:
+                st.error("😕 Usuário ou senha incorretos.")
+        
+        st.markdown('</div>', unsafe_allow_html=True)
+
+def check_authentication():
+    """Verifica se o usuário está autenticado. Se não, mostra a página de login."""
+    if not st.session_state.get("authenticated", False):
+        login_page()
+        return False
+    return True
 
 # -----------------------------------------------------------------------------
 # 2. INÍCIO DA APLICAÇÃO PRINCIPAL
@@ -66,11 +142,11 @@ st.set_page_config(
     layout="wide"
 )
 
-if not check_password():
+if not check_authentication():
     st.stop()
 
 # --- Barra Lateral e Título Principal ---
-st.sidebar.header(f"Bem-vindo, {st.session_state.get('username', 'Usuário')}!")
+st.sidebar.header(f"Bem-vindo, {st.session_state.get('username_display', 'Usuário')}!")
 st.sidebar.markdown("---")
 st.title("🚢 Central de Inteligência Marítima")
 
@@ -81,7 +157,7 @@ tab_monitoramento, tab_exploracao = st.tabs([
 ])
 
 # -----------------------------------------------------------------------------
-# ABA 1: MONITORAMENTO DE FROTA (Versão completa com tudo)
+# ABA 1: MONITORAMENTO DE FROTA (Seu código original, sem alterações)
 # -----------------------------------------------------------------------------
 with tab_monitoramento:
     st.header("Monitoramento da Frota Estratégica")
@@ -104,7 +180,6 @@ with tab_monitoramento:
         st.error(f"Arquivo de dados da frota '{DATA_FILE_FROTA}' não encontrado.")
         st.warning("Certifique-se de que o arquivo de dados MOCK está no repositório do GitHub.")
     else:
-        # Filtros na barra lateral
         st.sidebar.header("Filtros da Frota")
         status_selecionado = st.sidebar.multiselect(
             "Filtrar por Status:",
@@ -123,7 +198,6 @@ with tab_monitoramento:
             df_frota['Disponibilidade'].isin(disponibilidade_selecionada)
         ]
         
-        # KPIs
         st.markdown("#### Visão Geral da Frota Filtrada")
         col1, col2, col3 = st.columns(3)
         col1.metric("Navios na Seleção", f"{len(df_filtrado)}")
@@ -131,7 +205,6 @@ with tab_monitoramento:
         col3.metric("Navios Disponíveis", f"{len(df_filtrado[df_filtrado['Disponibilidade'] == 'Disponível para Frete'])}")
         st.markdown("---")
 
-        # Sub-abas para organizar a visualização
         sub_tab_cards, sub_tab_tabela, sub_tab_graficos = st.tabs([
             "Visão Rápida (Cards)", "Análise Detalhada (Tabela)", "Gráficos Interativos"
         ])
@@ -177,7 +250,7 @@ with tab_monitoramento:
                 st.warning("Nenhum dado para exibir nos gráficos com os filtros atuais.")
 
 # -----------------------------------------------------------------------------
-# ABA 2: EXPLORAÇÃO GLOBAL
+# ABA 2: EXPLORAÇÃO GLOBAL (Seu código original, sem alterações)
 # -----------------------------------------------------------------------------
 with tab_exploracao:
     st.header("🔎 Encontre Navios por Porto")
@@ -195,7 +268,6 @@ with tab_exploracao:
             st.warning("Por favor, digite o nome de um porto.")
         else:
             with st.spinner(f"Buscando navios em '{porto_input}'... (usando simulação)"):
-                # Simula a chamada ao serviço, mesmo sem a chave real
                 api_key = st.secrets.get("MARINETRAFFIC_API_KEY", "chave_mock_para_teste")
                 provider = MarineTrafficProvider(api_key=api_key)
                 service = VesselService(provider)
@@ -207,7 +279,6 @@ with tab_exploracao:
                 st.success(f"{len(df_resultados_porto)} navios encontrados para '{porto_input}':")
                 st.dataframe(df_resultados_porto, use_container_width=True)
                 
-                # Renomeia colunas para o mapa e verifica se existem
                 df_mapa = df_resultados_porto.copy()
                 if 'LAT' in df_mapa.columns and 'LON' in df_mapa.columns:
                     df_mapa.rename(columns={"LAT": "lat", "LON": "lon"}, inplace=True)
