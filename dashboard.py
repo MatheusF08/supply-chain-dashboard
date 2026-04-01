@@ -1,4 +1,4 @@
-# dashboard.py - VERSÃO COM LOGIN (COM ENTER) E BUSCA DE PORTO AUTOMÁTICA
+# dashboard.py - VERSÃO COM LOGIN, AUTOCOMPLETE E BOTÃO DE LOGOUT
 
 import streamlit as st
 import pandas as pd
@@ -39,7 +39,6 @@ def check_password():
 
     col1, col2, col3 = st.columns([1, 1.5, 1])
     with col2:
-        # O st.form garante que o "Enter" funcione no último campo (senha)
         with st.form("login_form"):
             st.header("Login")
             username = st.text_input("Usuário", key="username")
@@ -83,8 +82,23 @@ st.set_page_config(page_title="Central de Inteligência Marítima", page_icon="�
 if not check_password():
     st.stop()
 
+# --- BARRA LATERAL COM BOTÃO DE LOGOUT ---
 st.sidebar.header(f"Bem-vindo, {st.session_state.get('username', 'Usuário')}!")
+
+# BOTÃO DE LOGOUT ADICIONADO AQUI
+if st.sidebar.button("Sair (Logout)"):
+    # Limpa o estado da sessão para desautenticar o usuário
+    st.session_state["password_correct"] = False
+    # Limpa as credenciais por segurança
+    if "username" in st.session_state:
+        del st.session_state["username"]
+    if "password" in st.session_state:
+        del st.session_state["password"]
+    st.rerun() # Força o recarregamento para a tela de login
+
 st.sidebar.markdown("---")
+# --- FIM DA SEÇÃO DE LOGOUT ---
+
 st.title("🚢 Central de Inteligência Marítima")
 
 df_frota = carregar_dados_frota("mock_dados_frota.csv")
@@ -93,16 +107,18 @@ lista_portos = carregar_lista_de_portos()
 tab_monitoramento, tab_exploracao = st.tabs(["📍 Monitoramento de Frota", "🌍 Exploração Global"])
 
 # -----------------------------------------------------------------------------
-# ABA 1: MONITORAMENTO DE FROTA (Sem alterações)
+# ABA 1: MONITORAMENTO DE FROTA
 # -----------------------------------------------------------------------------
 with tab_monitoramento:
     st.header("Monitoramento da Frota Estratégica")
     if df_frota is None:
         st.error("Arquivo de dados da frota 'mock_dados_frota.csv' não encontrado.")
     else:
+        # Movido os filtros para dentro da condição para não aparecerem se os dados falharem
         st.sidebar.header("Filtros da Frota")
         status_selecionado = st.sidebar.multiselect("Filtrar por Status:", options=df_frota['Status do Navio'].unique(), default=df_frota['Status do Navio'].unique())
         disponibilidade_selecionada = st.sidebar.multiselect("Filtrar por Disponibilidade:", options=df_frota['Disponibilidade'].unique(), default=df_frota['Disponibilidade'].unique())
+        
         df_filtrado = df_frota[df_frota['Status do Navio'].isin(status_selecionado) & df_frota['Disponibilidade'].isin(disponibilidade_selecionada)]
         
         st.markdown("#### Visão Geral da Frota Filtrada")
@@ -162,7 +178,6 @@ with tab_exploracao:
         placeholder="Selecione ou digite o nome do porto..."
     )
 
-    # A busca agora é acionada assim que um porto é selecionado
     if porto_selecionado:
         with st.spinner(f"Buscando navios em '{porto_selecionado}'... (usando simulação)"):
             api_key = st.secrets.get("MARINETRAFFIC_API_KEY", "chave_mock_para_teste")
