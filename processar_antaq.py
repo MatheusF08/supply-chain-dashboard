@@ -1,4 +1,4 @@
-# processar_antaq.py (VERSÃO FINALÍSSIMA - CALCULANDO OS TEMPOS)
+# processar_antaq.py (VERSÃO OTIMIZADA - APENAS SANTOS)
 
 import pandas as pd
 import requests
@@ -6,13 +6,29 @@ import zipfile
 import io
 import os
 
-def baixar_e_processar_dados_antaq(ano: int):
-    print(f"Iniciando o processo para o ano de {ano}...")
+def baixar_e_processar_dados_antaq(ano: int, porto_filtro: str):
+    print(f"Iniciando o processo para o ano de {ano}, filtrando apenas para o porto: {porto_filtro}...")
+    # ... (o resto do código de download e limpeza inicial é o mesmo)
+    # ... (cole o código completo que está abaixo)
+# processar_antaq.py (VERSÃO OTIMIZADA - APENAS SANTOS)
+
+import pandas as pd
+import requests
+import zipfile
+import io
+import os
+
+def baixar_e_processar_dados_antaq(ano: int, porto_filtro: str):
+    """
+    Baixa, processa e salva os dados da ANTAQ, mas filtrando para um único porto
+    para reduzir o consumo de memória no Streamlit Cloud.
+    """
+    print(f"Iniciando o processo para o ano de {ano}, filtrando apenas para o porto: {porto_filtro}...")
     print("Isso pode levar vários minutos, por favor, aguarde...")
 
     url = f"https://web3.antaq.gov.br/ea/txt/{ano}.zip"
     nome_arquivo_txt = f"{ano}Atracacao.txt"
-    arquivo_saida_csv = "dados_portuarios.csv"
+    arquivo_saida_csv = "dados_portuarios.csv" # Vamos sobrescrever o arquivo antigo
 
     try:
         print(f"Baixando dados de: {url}" )
@@ -47,20 +63,25 @@ def baixar_e_processar_dados_antaq(ano: int):
         print(f"ERRO CRÍTICO: Colunas essenciais não encontradas: {colunas_faltando}")
         return
 
+    # --- OTIMIZAÇÃO PRINCIPAL: FILTRAR ANTES DE PROCESSAR ---
+    # Precisamos garantir que a coluna 'Porto' exista antes de filtrar
+    if 'Porto' in df.columns:
+        print(f"Filtrando dados apenas para o porto: {porto_filtro}")
+        df = df[df['Porto'] == porto_filtro].copy()
+    else:
+        print("ERRO: A coluna 'Porto' não foi encontrada para aplicar o filtro.")
+        return
+
     for col in ['Chegada', 'Atracacao', 'Desatracacao']:
         df[col] = pd.to_datetime(df[col], format='%d/%m/%Y %H:%M:%S', errors='coerce')
 
     df.dropna(subset=colunas_essenciais, inplace=True)
     
-    # --- A GRANDE CORREÇÃO: CALCULANDO OS TEMPOS NÓS MESMOS ---
     print("Calculando tempos de espera e operação...")
-    # Calcula a diferença em dias e converte para horas
     df['TempoEsperaAtracacao'] = (df['Atracacao'] - df['Chegada']).dt.total_seconds() / 3600
     df['TempoAtracado'] = (df['Desatracacao'] - df['Atracacao']).dt.total_seconds() / 3600
 
-    # Filtra valores negativos ou absurdos que podem existir nos dados brutos
-    df = df[df['TempoEsperaAtracacao'] >= 0]
-    df = df[df['TempoAtracado'] >= 0]
+    df = df[(df['TempoEsperaAtracacao'] >= 0) & (df['TempoAtracado'] >= 0)]
 
     colunas_para_salvar = [
         'Porto', 'Complexo Portuário', 'Navegacao', 'Chegada', 'Atracacao', 'Desatracacao',
@@ -72,11 +93,11 @@ def baixar_e_processar_dados_antaq(ano: int):
     df_final.to_csv(arquivo_saida_csv, index=False)
     
     print("-" * 50)
-    print(f"SUCESSO! Arquivo '{arquivo_saida_csv}' salvo com {len(df_final)} registros.")
-    print("Colunas salvas:", df_final.columns.tolist())
-    print("Agora o dashboard.py vai funcionar!")
+    print(f"SUCESSO! Arquivo OTIMIZADO '{arquivo_saida_csv}' salvo com {len(df_final)} registros (apenas para {porto_filtro}).")
+    print("Este arquivo é muito menor e deve funcionar no Streamlit Cloud.")
     print("-" * 50)
 
 if __name__ == "__main__":
     ano_para_processar = 2023 
-    baixar_e_processar_dados_antaq(ano_para_processar)
+    porto_para_filtrar = "Santos" # Vamos focar em Santos para a POC
+    baixar_e_processar_dados_antaq(ano_para_processar, porto_para_filtrar)
