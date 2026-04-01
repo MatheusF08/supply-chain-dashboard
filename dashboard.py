@@ -1,4 +1,4 @@
-# dashboard.py - VERSÃO FINAL COM EXPLORAÇÃO GLOBAL
+# dashboard.py - VERSÃO CORRIGIDA E COMPLETA COM TODAS AS FUNCIONALIDADES
 
 import streamlit as st
 import pandas as pd
@@ -6,7 +6,7 @@ import os
 import plotly.express as px
 from datetime import datetime
 
-# Importa as classes da nossa nova arquitetura
+# Importa as classes da nossa arquitetura
 from services.vessel_service import VesselService
 from providers.marinetraffic_provider import MarineTrafficProvider
 
@@ -29,7 +29,8 @@ def check_password():
             submitted = st.form_submit_button("Entrar")
             
             if submitted:
-                if st.session_state["password"] == st.secrets.get("password", "admin123"):
+                # Use st.secrets.get() para evitar erro se o secret não existir
+                if st.secrets and st.session_state["password"] == st.secrets.get("password"):
                     st.session_state["password_correct"] = True
                     st.rerun()
                 else:
@@ -64,7 +65,7 @@ tab_monitoramento, tab_exploracao = st.tabs([
 
 
 # -----------------------------------------------------------------------------
-# ABA 1: MONITORAMENTO DE FROTA (Nosso dashboard antigo)
+# ABA 1: MONITORAMENTO DE FROTA (Versão completa com tudo)
 # -----------------------------------------------------------------------------
 with tab_monitoramento:
     st.header("Monitoramento da Frota Estratégica")
@@ -106,7 +107,7 @@ with tab_monitoramento:
             df_frota['Disponibilidade'].isin(disponibilidade_selecionada)
         ]
         
-        # --- KPIs e Cards (código anterior) ---
+        # --- KPIs ---
         st.markdown("### Visão Geral da Frota")
         col1, col2, col3 = st.columns(3)
         col1.metric("Navios na Seleção", f"{len(df_filtrado)}")
@@ -114,11 +115,46 @@ with tab_monitoramento:
         col3.metric("Navios Disponíveis", f"{len(df_filtrado[df_filtrado['Disponibilidade'] == 'Disponível para Frete'])}")
         
         st.markdown("---")
-        st.subheader("Status Individual dos Navios")
-        for index, row in df_filtrado.sort_values(by="ETA Previsto").iterrows():
-             with st.container(border=True):
-                # ... (código dos cards que já tínhamos) ...
-                st.text(f"{row['Nome do Navio']} (IMO: {row['IMO']}) - Destino: {row['Porto de Destino']}")
+
+        # --- Sub-abas para organizar a visualização ---
+        sub_tab_cards, sub_tab_tabela, sub_tab_graficos = st.tabs([
+            "Visão por Cards", "Tabela Detalhada", "Análise Gráfica"
+        ])
+
+        with sub_tab_cards:
+            st.subheader("Status Individual dos Navios")
+            for index, row in df_filtrado.sort_values(by="ETA Previsto").iterrows():
+                status_color = {"Em Rota": "blue", "Ancorado": "orange", "Atracado": "green"}.get(row['Status do Navio'], "gray")
+                with st.container(border=True):
+                    c1, c2 = st.columns([3, 1])
+                    with c1: st.subheader(f"{row['Nome do Navio']} (IMO: {row['IMO']})")
+                    with c2: st.markdown(f"**<p style='text-align: right; color: {status_color};'>{row['Status do Navio']}</p>**", unsafe_allow_html=True)
+                    
+                    ci1, ci2, ci3 = st.columns(3)
+                    with ci1: st.info(f"Chegada: {row['ETA Previsto'].strftime('%d/%m %H:%M')}")
+                    with ci2: st.info(f"Destino: {row['Porto de Destino']}")
+                    with ci3: st.info(f"Partida: {row['Próxima Partida Estimada'].strftime('%d/%m %H:%M')}")
+                    
+                    cc1, cc2 = st.columns(2)
+                    with cc1: st.success(f"Carga: {row['Carga Atual']}")
+                    with cc2: st.warning(f"Disponibilidade: {row['Disponibilidade']}")
+
+        with sub_tab_tabela:
+            st.subheader("Dados Completos da Frota")
+            st.dataframe(df_filtrado, use_container_width=True)
+
+        with sub_tab_graficos:
+            st.subheader("Análises Visuais da Frota")
+            if not df_filtrado.empty:
+                g1, g2 = st.columns(2)
+                with g1:
+                    fig_status = px.pie(df_filtrado, names='Status do Navio', title='Distribuição por Status', hole=.3)
+                    st.plotly_chart(fig_status, use_container_width=True)
+                with g2:
+                    fig_portos = px.bar(df_filtrado['Porto de Destino'].value_counts().reset_index(), x='Porto de Destino', y='count', title='Navios por Porto de Destino')
+                    st.plotly_chart(fig_portos, use_container_width=True)
+            else:
+                st.warning("Nenhum dado para exibir nos gráficos com os filtros atuais.")
 
 
 # -----------------------------------------------------------------------------
@@ -135,27 +171,17 @@ with tab_exploracao:
             st.warning("Por favor, digite o nome de um porto.")
         else:
             with st.spinner(f"Buscando navios em '{porto_input}'... (usando simulação)"):
-                # --- A MÁGICA ACONTECE AQUI ---
-                # Inicializa o provedor e o serviço
                 api_key = st.secrets.get("MARINETRAFFIC_API_KEY", "chave_mock_para_teste")
                 provider = MarineTrafficProvider(api_key=api_key)
                 service = VesselService(provider)
-                
-                # Chama a nova função do serviço
                 df_resultados_porto = service.find_vessels_by_port(porto_input)
-                # -----------------------------
 
             if df_resultados_porto.empty:
                 st.error(f"Nenhum navio encontrado para '{porto_input}' nos dados de simulação.")
             else:
                 st.success(f"{len(df_resultados_porto)} navios encontrados para '{porto_input}':")
-                
-                # Exibe os resultados em uma tabela
                 st.dataframe(df_resultados_porto, use_container_width=True)
-
-                # Opcional: Mostrar em um mapa se houver dados de lat/lon
                 if 'LAT' in df_resultados_porto.columns and 'LON' in df_resultados_porto.columns:
                     st.subheader("Localização no Mapa")
                     df_mapa = df_resultados_porto.rename(columns={"LAT": "lat", "LON": "lon"})
                     st.map(df_mapa)
-
